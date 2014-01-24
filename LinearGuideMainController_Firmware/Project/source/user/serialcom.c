@@ -117,6 +117,7 @@ uint8_t parseSerialMessage (PSER_MSG message)
 		return 1;
 	if(strncmp(&usartRawMessage[1], "$HOME", 5) == 0)					// it is home command
 		message->command = COMMAND_HOME;
+	
 	else if(strncmp(&usartRawMessage[1], "$STEP", 5) == 0){		// it is home command
 		my_strtok (&usartRawMessage[1], ","); 									//get $STEP
 		message->command = COMMAND_STEP;
@@ -127,6 +128,41 @@ uint8_t parseSerialMessage (PSER_MSG message)
 		tempPtr = my_strtok (0, "\r");					// pointer to speed string
 		message->distance = atoi(tempPtr);				// convert string to integer
 	}
+	
+	else if (strncmp(&usartRawMessage[1], "$TOLF", 5) == 0){
+		message->command = COMMAND_LEFT;	
+	}
+	
+	else if (strncmp(&usartRawMessage[1], "$TORG", 5) == 0){
+		message->command = COMMAND_RIGHT;
+	}	
+	
+	else if(strncmp(&usartRawMessage[1], "$STLF", 5) == 0){		// it is home command
+		my_strtok (&usartRawMessage[1], ","); 									//get $STEP
+		message->command = COMMAND_STLF;
+		
+		tempPtr = my_strtok (0, ",");					// pointer to speed string
+		message->speed = atoi(tempPtr);				// convert string to integer
+		
+		tempPtr = my_strtok (0, "\r");					// pointer to speed string
+		message->distance = atoi(tempPtr);				// convert string to integer
+	}
+	
+	else if(strncmp(&usartRawMessage[1], "$STRG", 5) == 0){		// it is home command
+		my_strtok (&usartRawMessage[1], ","); 									//get $STEP
+		message->command = COMMAND_STRG;
+		
+		tempPtr = my_strtok (0, ",");					// pointer to speed string
+		message->speed = atoi(tempPtr);				// convert string to integer
+		
+		tempPtr = my_strtok (0, "\r");					// pointer to speed string
+		message->distance = atoi(tempPtr);				// convert string to integer
+	}
+	
+	else if (strncmp(&usartRawMessage[1], "$STAT", 5) == 0){
+		message->command = COMMAND_STATUS;
+	}
+	
 	else
 		return 1;
 	

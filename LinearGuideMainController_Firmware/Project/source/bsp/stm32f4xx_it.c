@@ -165,6 +165,26 @@ void SysTick_Handler(void)
 }*/
 
 /**
+  * @brief  This function handles TIM3 global interrupt request.
+  * @param  None
+  * @retval None
+  */
+uint16_t capture = 0;
+extern uint8_t TimOverflow;
+void TIM5_IRQHandler(void)
+{
+  if (TIM_GetITStatus(TIM5, TIM_IT_CC1) != RESET)
+  {
+    TIM_ClearITPendingBit(TIM5, TIM_IT_CC1);
+
+		capture = TIM_GetCapture1(TIM5);
+    TIM_SetCompare1(TIM5, capture + 20000);
+		
+		TimOverflow = 1;
+  }
+}
+
+/**
   * @brief  Encoder1 interrupt update
   * @param  void
   * @retval void

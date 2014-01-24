@@ -8,6 +8,9 @@ extern void delay_ms(uint32_t miliseconds);
 int32_t qeiFeedback = 0;
 uint32_t vextaFeedback = 0;
 float lgPosition = 0.0;
+int32_t posToGo = 0;
+
+uint8_t TimOverflow = 0;
 
 /**
   * @brief  This function is to initialize pwm output for stepper motor.
@@ -358,17 +361,19 @@ void TIM12_CH2_PWM_OUT (uint16_t frequency, uint8_t dutyCycle)
 void runStepper (uint8_t direction, uint16_t speed)
 {
 	// due to prescaler setting, minimum speed = 500Hz
-	if (speed < 500)
-		speed = 500;
+	if (speed < 321)
+		speed = 321;
 	
 	// the output is inverted, thus 100% duty cycle = 0% duty in actual.
 	if (direction == MOTOR_FORWARD){
 		TIM12_CH1_PWM_OUT(speed, 50);
 		TIM12_CH2_PWM_OUT(speed, 100);
+		//printf ("$LG4,%d\r", counter);
 	}
 	else if (direction == MOTOR_BACKWARD){
 		TIM12_CH2_PWM_OUT(speed, 50);
 		TIM12_CH1_PWM_OUT(speed, 100);
+		//printf ("$LG8,%d\r", counter);	
 	}
 	else{
 		TIM12_CH1_PWM_OUT(speed, 100);
@@ -386,24 +391,71 @@ void runStepper (uint8_t direction, uint16_t speed)
   */
 void linearGuideStep (uint8_t direction, uint8_t speed, uint16_t stepDistance)
 {
-	int32_t distanceInPulse;
-	uint16_t speedInHz;
+	int32_t distanceInPulse, overshoot = 3;
+	uint16_t speedInHz, currSpeedHz = 321;
+	uint16_t remainDistance;
+	
 	speedInHz = speed*16;							// Convert speed into Hertz. 1mm/s = 16Hz
 																		// 1mm = 16 pulses
-	resetQeiFeedback();								// reset QEI feedback
 	
 	if (direction == MOTOR_FORWARD){
+		
 		// If the tail sensor is on, mean the it reaches the maximum, do nothing and return
 		if (TAIL_SENSOR == Bit_RESET)
 			return;
 		
+		posToGo += (int32_t)stepDistance;
+		distanceInPulse = posToGo*16 - overshoot;							// Convert Distance into equivalent QEI Feedback.
+		stepDistance = stepDistance * 16 - overshoot;					// Convert Step Distance into equivalent QEI Feedback.
+		remainDistance = distanceInPulse - getQeiFeedback();	//  Convert remaining Distance into equivalent QEI Feedback.
+		
+		// run the stepper
 		MOTOR_COIL_ON;												// on motor coil
-		runStepper (direction, speedInHz);		// run the motor
-		distanceInPulse = stepDistance*16;		// Convert Distance into equivalent QEI Feedback.
+		runStepper (direction, currSpeedHz);	// run the motor
+		
+		// ramp up every 20ms. TimOverflow is the flag keep the 20ms time.
+		while (currSpeedHz < speedInHz){
+			if (TimOverflow == 1){
+				// clear overflow flag
+				TimOverflow = 0;
+				
+				//increase 180hz per ramp
+				currSpeedHz = currSpeedHz + 40;
+				
+				// limit the ramping. if hit maximum speed, quit the ramping
+				if (currSpeedHz > speedInHz)
+					currSpeedHz = speedInHz;
+
+				runStepper (direction, currSpeedHz);		// run the motor
+			}
+		}
+	
+		// wait until last 1/3 distance for ramp down. while waiting, keep the speed
 		while (1){
+			remainDistance = distanceInPulse - getQeiFeedback();		//  Convert remaining Distance into equivalent QEI Feedback.
+			if (remainDistance < (stepDistance/3))
+				break;
+		}
+		
+		while (1){
+			//printf ("$LG,%u,%d,%d,%d\r", getVextaFeedback() ,getQeiFeedback(), HEAD_SENSOR, TAIL_SENSOR);	
+			// ramp down. ramp until speed 321
+			while (currSpeedHz > 321){
+				// if reach the end, direct break the loop
+				if (getQeiFeedback() >= distanceInPulse)
+					break;
+				
+				if (TimOverflow == 1){
+					currSpeedHz -= 40;
+					runStepper (direction, currSpeedHz);		// run the motor
+					TimOverflow = 0;
+				}
+			}
+
 			// wait for feedback overshoot
 			if (getQeiFeedback() >= distanceInPulse)
 				break;
+			
 			// or the tail sensor is on
 			if (TAIL_SENSOR == Bit_RESET)
 				break;
@@ -413,22 +465,68 @@ void linearGuideStep (uint8_t direction, uint8_t speed, uint16_t stepDistance)
 		// If the head sensor is on, mean the it reaches the maximum, do nothing and return
 		if (HEAD_SENSOR == Bit_RESET)
 			return;
+		
+		posToGo -= (int32_t)stepDistance;
+		distanceInPulse = posToGo*16 + overshoot;								// Convert Distance into equivalent QEI Feedback.
+		stepDistance = stepDistance * 16 - overshoot;						// Convert Step Distance into equivalent QEI Feedback.
+		remainDistance = getQeiFeedback() - distanceInPulse;		//  Convert remaining Distance into equivalent QEI Feedback.
+		
 		MOTOR_COIL_ON;												// on motor coil
 		runStepper (direction, speedInHz);		// run the motor
-		distanceInPulse = stepDistance*(-16);		// Convert Distance into equivalent QEI Feedback.
-		while (distanceInPulse < getQeiFeedback()){
-			// wait for feedback overshoot
-			if (distanceInPulse >= getQeiFeedback())
+		
+		// ramp up every 20ms. TimOverflow is the flag keep the 20ms time.
+		while (currSpeedHz < speedInHz){
+			if (TimOverflow == 1){
+				// clear overflow flag
+				TimOverflow = 0;
+				
+				//increase 180hz per ramp
+				currSpeedHz = currSpeedHz + 40;
+				
+				// limit the ramping. if hit maximum speed, quit the ramping
+				if (currSpeedHz > speedInHz)
+					currSpeedHz = speedInHz;
+
+				runStepper (direction, currSpeedHz);		// run the motor
+			}
+		}
+	
+		// wait until last 1/3 distance for ramp down. while waiting, keep the speed
+		// wait until last 1/3 distance for ramp down. while waiting, keep the speed
+		while (1){
+			remainDistance = getQeiFeedback() - distanceInPulse;		//  Convert remaining Distance into equivalent QEI Feedback.
+			if (remainDistance < (stepDistance/3))
 				break;
-			// or the head sensor is on
+		}
+
+		while (1){
+			//printf ("$LG,%u,%d,%d,%d\r", getVextaFeedback() ,getQeiFeedback(), HEAD_SENSOR, TAIL_SENSOR);	
+			// ramp down. ramp until speed 321
+			while (currSpeedHz > 321){
+				// if reach the end, direct break the loop
+				if (getQeiFeedback() <= distanceInPulse)
+					break;
+				
+				if (TimOverflow == 1){
+					currSpeedHz -= 40;
+					runStepper (direction, currSpeedHz);		// run the motor
+					TimOverflow = 0;
+				}
+			}
+
+			// wait for feedback overshoot
+			if (getQeiFeedback() <= distanceInPulse)
+				break;
+			
+			// or the tail sensor is on
 			if (HEAD_SENSOR == Bit_RESET)
 				break;
 		}
 	}
 	
 	runStepper (MOTOR_STOP, speedInHz);		// stop the motor
+	delay_ms(1000);
 	MOTOR_COIL_OFF;
-	delay_ms(10);
 }
 
 /**
@@ -439,10 +537,28 @@ void linearGuideStep (uint8_t direction, uint8_t speed, uint16_t stepDistance)
 void linearGuideHome (void)
 {
 	MOTOR_COIL_ON;
-	runStepper (MOTOR_BACKWARD, 700);
+
 	while (HEAD_SENSOR != Bit_RESET){
+		runStepper (MOTOR_BACKWARD, 1000);
 		delay_ms(100);
 	}
-	delay_ms(500);
+	posToGo = 0;
+	resetQeiFeedback();														// reset QEI feedback to 0
+	runStepper (MOTOR_STOP, 1000);
+	delay_ms(1000);
+	linearGuideStep (MOTOR_FORWARD, 50, 500);
+	MOTOR_COIL_ON;
+
+	while (HEAD_SENSOR != Bit_RESET){
+		runStepper (MOTOR_BACKWARD, 1000);
+		delay_ms(100);
+	}
+	runStepper (MOTOR_STOP, 1000);		// stop the motor
+	delay_ms(1000);
 	MOTOR_COIL_OFF;
+	
+	resetQeiFeedback();														// reset QEI feedback to 0
+	resetVextaFeedback();													// reset Vexta feedback to 0
+	resetPosition ();															// reset position to 0.0mm.
+	posToGo = 0;
 }

@@ -28,6 +28,11 @@
 
 #define COMMAND_STEP 0
 #define COMMAND_HOME 1
+#define COMMAND_LEFT 2
+#define COMMAND_RIGHT 3
+#define COMMAND_STLF 4
+#define COMMAND_STRG 5
+#define COMMAND_STATUS 6
 
 typedef struct {
 	uint8_t	command;
