@@ -96,7 +96,7 @@ void UsartRxCallback (uint8_t data)
 	// if counter != 1, mean receiving in progress, keep receive data
 	else{
 		usartRawMessage[counter++] = data;
-		if (data == '\r'){
+		if (data == '\n'){
 			usartRawMessage[0] = 1;
 			counter = 1;
 		}
@@ -111,32 +111,29 @@ void UsartRxCallback (uint8_t data)
   */
 uint8_t parseSerialMessage (PSER_MSG message)
 {
-	char *tempPtr;
+	char *tempPtr, *csPtr;
+	uint8_t checksum, rcvChecksum;
 	
+	// if there is no message, return 1.
 	if (usartRawMessage[0] == 0)
 		return 1;
-	if(strncmp(&usartRawMessage[1], "$HOME", 5) == 0)					// it is home command
-		message->command = COMMAND_HOME;
 	
-	else if(strncmp(&usartRawMessage[1], "$STEP", 5) == 0){		// it is home command
-		my_strtok (&usartRawMessage[1], ","); 									//get $STEP
-		message->command = COMMAND_STEP;
-		
-		tempPtr = my_strtok (0, ",");					// pointer to speed string
-		message->speed = atoi(tempPtr);				// convert string to integer
-		
-		tempPtr = my_strtok (0, "\r");					// pointer to speed string
-		message->distance = atoi(tempPtr);				// convert string to integer
+	// if there is message received, check the message integrity using NMEA Checksum
+	// invalid checksum return 2
+	csPtr = strchr(&usartRawMessage[1], '*');				//find checksum of this string
+	checksum = htoi (csPtr+1, 2);
+	rcvChecksum = getNmeaChecksum (&usartRawMessage[1], strlen(&usartRawMessage[1]));
+	if (checksum != rcvChecksum){
+		// clear the usart buffer for next receive
+		memset (usartRawMessage, 0, 200);
+		return 2;
 	}
 	
-	else if (strncmp(&usartRawMessage[1], "$TOLF", 5) == 0){
-		message->command = COMMAND_LEFT;	
-	}
+	if(strncmp(&usartRawMessage[1], "$HOMEL", 6) == 0)					// it is home LEFT command
+		message->command = COMMAND_HOME_LEFT;
 	
-	else if (strncmp(&usartRawMessage[1], "$TORG", 5) == 0){
-		message->command = COMMAND_RIGHT;
-	}	
-	
+	else if(strncmp(&usartRawMessage[1], "$HOMER", 6) == 0)			// it is home RIGHT command
+		message->command = COMMAND_HOME_RIGHT;
 	else if(strncmp(&usartRawMessage[1], "$STLF", 5) == 0){		// it is home command
 		my_strtok (&usartRawMessage[1], ","); 									//get $STEP
 		message->command = COMMAND_STLF;
@@ -163,8 +160,10 @@ uint8_t parseSerialMessage (PSER_MSG message)
 		message->command = COMMAND_STATUS;
 	}
 	
-	else
-		return 1;
+	else{	
+		// clear the usart buffer for next receive
+		message->command = COMMAND_UNKNOWN;
+	}
 	
 	// clear the usart buffer for next receive
 	memset (usartRawMessage, 0, 200);
@@ -195,4 +194,41 @@ static char *my_strtok(char *s1, char *s2)
 	if (end-beg == 1)
 		return s2;
 	return(beg);
+}
+
+uint8_t getNmeaChecksum (char *nmeaStr, uint16_t length)
+{
+	uint8_t checksum = 0;
+	uint16_t i;
+	length = length - 5;		//last 4 char not count in nmea checksum, *cc\r\n"
+	for(i=1; i<length; i++)		//1st character not count in nmea checksum '$'
+		checksum ^= nmeaStr[i];
+	return checksum;
+}
+
+uint8_t getXorChecksum (char *str, uint16_t length)
+{
+	uint8_t checksum = 0;
+	uint16_t i;
+	for(i=0; i<length; i++)		//1st character not count in nmea checksum '$'
+		checksum ^= str[i];
+	return checksum;
+}
+
+int32_t htoi(char *s, uint8_t length)
+{
+	int32_t checksum = 0, t;
+	uint8_t i;
+	for(i=0; i<length; i++){
+	 	if ((s[i] >= 'A') && (s[i] <= 'F'))
+            t = s[i] - 'A' + 10;
+        else if ((s[i] >= 'a') && (s[i] <= 'f'))
+            t = s[i] - 'a' + 10;
+        else if ((s[i] >= '0') && (s[i] <= '9'))
+            t = s[i] - '0';
+        else
+            return -1;					//not belongs to hex, hex must better '0'-'9', 'a'-'f', 'A'-'F'
+		checksum = (checksum<<4) + t;
+	}
+	return checksum;
 }

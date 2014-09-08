@@ -56,9 +56,11 @@ void resetQeiFeedback (void);
 uint32_t getVextaFeedback (void);
 void resetVextaFeedback (void);
 float getPosition (void);
-void resetPosition (void);
+void resetCurrentPosition (float position);
+void resetPositionToGo (int position);
 
-void linearGuideHome (void);
+void linearGuideHomeLeft (void);
+void linearGuideHomeRight (void);
 void linearGuideStep (uint8_t direction, uint8_t speed, uint16_t stepDistance);
 
 #endif /*__STEPPER_H */

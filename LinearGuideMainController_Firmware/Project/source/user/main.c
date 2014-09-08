@@ -108,6 +108,7 @@ int main(void)
 		To reconfigure the default setting of SystemInit() function, refer to
 		system_stm32f4xx.c file
 	*/
+	uint8_t status;
 	
 	Usart2_init(115200);
 	GPIO_Configuration ();
@@ -139,54 +140,36 @@ int main(void)
 	} */
 	
  	// Home linear guide
-	linearGuideHome ();														// home the linear guide
-// 	delay_ms(1000);
-//  	linearGuideStep (MOTOR_FORWARD, 50, 1000);		// move motor forward, 100mm/s, 1000mm distance
-// 	delay_ms(1000);
-// 	linearGuideHome ();														// home the linear guide
+	linearGuideHomeLeft ();														// home the linear guide
 	
 	while (1){
+		status = parseSerialMessage(&serialMsg);
 		// receive and process message from usart2
-		if (parseSerialMessage(&serialMsg) == 1)
+		// if no message, just continue
+		if (status == 1)
 			continue;
- 		// perform homing action here
-		if(serialMsg.command == COMMAND_HOME){
-			linearGuideHome ();														// home the linear guide
+		
+		// receive and process message from usart2
+		// if checksum error, print 
+		else if (status == 2){
+			// feedback to PC on machine status
+			printf ("$CER\r");	
+			continue;
+		}
+
+		// perform go to Left Edge
+		if (serialMsg.command == COMMAND_HOME_LEFT){
+			linearGuideHomeLeft ();														// home the linear guide
 			delay_ms(1000);
 			// feedback to PC on machine status
 			printf ("$LG,%.2f,%d,%d\r", getPosition(), HEAD_SENSOR, TAIL_SENSOR);
 		}
- 		// perform STEP to right action here
-		else if (serialMsg.command == COMMAND_STEP){
-			linearGuideStep (MOTOR_FORWARD, serialMsg.speed, serialMsg.distance);		// move motor forward, 50mm/s, 25mm distance
-			// feedback to PC on machine status
-			printf ("$LG,%.2f,%d,%d\r", getPosition(), HEAD_SENSOR, TAIL_SENSOR);
-		}
-		// perform go to Left Edge
-		else if (serialMsg.command == COMMAND_LEFT){
-				MOTOR_COIL_ON;
-
-				while (HEAD_SENSOR != Bit_RESET){
-					//linearGuideStep (MOTOR_BACKWARD, 50, 1000);
-					runStepper (MOTOR_BACKWARD, 1000);
-					delay_ms(100);
-				}
-				MOTOR_COIL_OFF;
- 			// feedback to PC on machine status
- 			printf ("$LG,%.2f,%d,%d\r", getPosition(), HEAD_SENSOR, TAIL_SENSOR);				
-		}
 		// perform go to Right Edge
-		else if (serialMsg.command == COMMAND_RIGHT){
-			MOTOR_COIL_ON;
-
-			while (TAIL_SENSOR != Bit_RESET){
-				//linearGuideStep (MOTOR_FORWARD, 50, 1000);
-				runStepper (MOTOR_FORWARD, 1000);
-				delay_ms(100);
-			}
-			MOTOR_COIL_OFF;
- 			// feedback to PC on machine status
- 			printf ("$LG,%.2f,%d,%d\r", getPosition(), HEAD_SENSOR, TAIL_SENSOR);				
+		else if (serialMsg.command == COMMAND_HOME_RIGHT){
+			linearGuideHomeRight ();														// home the linear guide
+			delay_ms(1000);
+			// feedback to PC on machine status
+			printf ("$LG,%.2f,%d,%d\r", getPosition(), HEAD_SENSOR, TAIL_SENSOR);			
 		}
  		// perform STEP to right action here
  		else if (serialMsg.command == COMMAND_STRG){
@@ -204,6 +187,9 @@ int main(void)
 		else if (serialMsg.command == COMMAND_STATUS){
  			// feedback to PC on machine status
  			printf ("$LG,%.2f,%d,%d\r", getPosition(), HEAD_SENSOR, TAIL_SENSOR);
+		}
+		else if (serialMsg.command == COMMAND_UNKNOWN){
+			printf ("$NAK\r");
 		}
 	}
 

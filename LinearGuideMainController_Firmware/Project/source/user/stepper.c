@@ -246,14 +246,35 @@ float getPosition (void)
 }
 
 /**
-  * @brief  This function resets current position to 0.
-						CALL THIS FUNCTION ONLY WHEN YOU DO HOMING.
-  * @param  None
+  * @brief  This function resets current position to the value you wish.
+            Usually ONLY Step Left, Step Right, Home will use this.
+  * @param  The current position value you would like to reset to
   * @retval None
   */
-void resetPosition (void)
+void resetCurrentPosition (float position)
 {
-	lgPosition = 0.0;
+	//1520.25
+	//1520.31
+	lgPosition = position;
+}
+
+/**
+  * @brief  This function reset "position to go" to the value you wish.
+            Usually ONLY Step Left, Step Right, Home will use this.
+            This function different from resetCurrentPosition as it reset the "position to go"
+            Current Position will keep update while the motor is moving. Position to go is the
+            position you set where you want to go. It is not current position and will not update
+            itself. Current Position will be in float, while posToGo is in int as smallest step is 1mm.
+            reset position is in multiplier of 5. 1mm = 5. if wish to reset to 100mm. value of postogo is 500.
+  * @param  The "position to go" value you would like to reset to
+  * @retval None
+  */
+void resetPositionToGo (int position)
+{
+	//1520.25
+	//1520.31
+	//1520.25
+	posToGo = position;
 }
 
 /**
@@ -386,7 +407,7 @@ void runStepper (uint8_t direction, uint16_t speed)
 						user define speed and distance
   * @param  direction: MOTOR_FORWARD or MOTOR_BACKWARD
   * @param  speed: speed of linear guide in mm/s
-	* @param  stepDistance: Distance to move in mm
+	* @param  stepDistance: Distance to move in mm * 5. 1mm will get 5 step distance
   * @retval None
   */
 void linearGuideStep (uint8_t direction, uint8_t speed, uint16_t stepDistance)
@@ -413,28 +434,38 @@ void linearGuideStep (uint8_t direction, uint8_t speed, uint16_t stepDistance)
 		MOTOR_COIL_ON;												// on motor coil
 		runStepper (direction, currSpeedHz);	// run the motor
 		
-		// ramp up every 20ms. TimOverflow is the flag keep the 20ms time.
-		while (currSpeedHz < speedInHz){
-			if (TimOverflow == 1){
-				// clear overflow flag
-				TimOverflow = 0;
-				
-				//increase 180hz per ramp
-				currSpeedHz = currSpeedHz + 40;
-				
-				// limit the ramping. if hit maximum speed, quit the ramping
-				if (currSpeedHz > speedInHz)
-					currSpeedHz = speedInHz;
+		// perform ramping if only step distance > 10mm. else skip ramping as the distance is not enough for ramping
+		if (stepDistance > 700){
+			// ramp up every 20ms. TimOverflow is the flag keep the 20ms time.
+			while (currSpeedHz < speedInHz){
+				if (TimOverflow == 1){
+					// clear overflow flag
+					TimOverflow = 0;
+					
+					//increase 180hz per ramp
+					currSpeedHz = currSpeedHz + 40;
+					
+					// limit the ramping. if hit maximum speed, quit the ramping
+					if (currSpeedHz > speedInHz)
+						currSpeedHz = speedInHz;
 
-				runStepper (direction, currSpeedHz);		// run the motor
+					runStepper (direction, currSpeedHz);		// run the motor
+				}
+				
+				// ifthe tail sensor is on
+				if (TAIL_SENSOR == Bit_RESET)
+					break;
 			}
-		}
-	
-		// wait until last 1/3 distance for ramp down. while waiting, keep the speed
-		while (1){
-			remainDistance = distanceInPulse - getQeiFeedback();		//  Convert remaining Distance into equivalent QEI Feedback.
-			if (remainDistance < (stepDistance/3))
-				break;
+		
+			// wait until last 1/3 distance for ramp down. while waiting, keep the speed
+			while (1){
+				remainDistance = distanceInPulse - getQeiFeedback();		//  Convert remaining Distance into equivalent QEI Feedback.
+				if (remainDistance < (stepDistance/3))
+					break;
+				// or the tail sensor is on
+				if (TAIL_SENSOR == Bit_RESET)
+					break;
+			}
 		}
 		
 		while (1){
@@ -474,29 +505,38 @@ void linearGuideStep (uint8_t direction, uint8_t speed, uint16_t stepDistance)
 		MOTOR_COIL_ON;												// on motor coil
 		runStepper (direction, speedInHz);		// run the motor
 		
-		// ramp up every 20ms. TimOverflow is the flag keep the 20ms time.
-		while (currSpeedHz < speedInHz){
-			if (TimOverflow == 1){
-				// clear overflow flag
-				TimOverflow = 0;
-				
-				//increase 180hz per ramp
-				currSpeedHz = currSpeedHz + 40;
-				
-				// limit the ramping. if hit maximum speed, quit the ramping
-				if (currSpeedHz > speedInHz)
-					currSpeedHz = speedInHz;
+		// perform ramping if only step distance > 10mm. else skip ramping as the distance is not enough for ramping
+		if (stepDistance > 700){
+			// ramp up every 20ms. TimOverflow is the flag keep the 20ms time.
+			while (currSpeedHz < speedInHz){
+				if (TimOverflow == 1){
+					// clear overflow flag
+					TimOverflow = 0;
+					
+					//increase 180hz per ramp
+					currSpeedHz = currSpeedHz + 40;
+					
+					// limit the ramping. if hit maximum speed, quit the ramping
+					if (currSpeedHz > speedInHz)
+						currSpeedHz = speedInHz;
 
-				runStepper (direction, currSpeedHz);		// run the motor
+					runStepper (direction, currSpeedHz);		// run the motor
+				}
+				// or the tail sensor is on
+				if (HEAD_SENSOR == Bit_RESET)
+					break;
 			}
-		}
-	
-		// wait until last 1/3 distance for ramp down. while waiting, keep the speed
-		// wait until last 1/3 distance for ramp down. while waiting, keep the speed
-		while (1){
-			remainDistance = getQeiFeedback() - distanceInPulse;		//  Convert remaining Distance into equivalent QEI Feedback.
-			if (remainDistance < (stepDistance/3))
-				break;
+		
+			// wait until last 1/3 distance for ramp down. while waiting, keep the speed
+			// wait until last 1/3 distance for ramp down. while waiting, keep the speed
+			while (1){
+				remainDistance = getQeiFeedback() - distanceInPulse;		//  Convert remaining Distance into equivalent QEI Feedback.
+				if (remainDistance < (stepDistance/3))
+					break;
+				// or the tail sensor is on
+				if (HEAD_SENSOR == Bit_RESET)
+					break;
+			}
 		}
 
 		while (1){
@@ -530,11 +570,11 @@ void linearGuideStep (uint8_t direction, uint8_t speed, uint16_t stepDistance)
 }
 
 /**
-  * @brief  This function is to home the linear guide
+  * @brief  This function is to home the linear guide to the left
   * @param  None
   * @retval None
   */
-void linearGuideHome (void)
+void linearGuideHomeLeft (void)
 {
 	MOTOR_COIL_ON;
 
@@ -542,8 +582,11 @@ void linearGuideHome (void)
 		runStepper (MOTOR_BACKWARD, 1000);
 		delay_ms(100);
 	}
-	posToGo = 0;
 	resetQeiFeedback();														// reset QEI feedback to 0
+	resetVextaFeedback();													// reset Vexta feedback to 0
+	resetCurrentPosition (0.0);										// reset position to 0.0mm.
+	resetPositionToGo (0);                        // reset position to go to 0mm.
+	
 	runStepper (MOTOR_STOP, 1000);
 	delay_ms(1000);
 	linearGuideStep (MOTOR_FORWARD, 50, 500);
@@ -559,6 +602,46 @@ void linearGuideHome (void)
 	
 	resetQeiFeedback();														// reset QEI feedback to 0
 	resetVextaFeedback();													// reset Vexta feedback to 0
-	resetPosition ();															// reset position to 0.0mm.
-	posToGo = 0;
+	resetCurrentPosition (0.0);										// reset position to 0.0mm.
+	resetPositionToGo (0);                        // reset position to go to 0mm.
+}
+
+/**
+  * @brief  This function is to home the linear guide to the right
+  * @param  None
+  * @retval None
+  */
+void linearGuideHomeRight (void)
+{
+	MOTOR_COIL_ON;
+
+	while (TAIL_SENSOR != Bit_RESET){
+		runStepper (MOTOR_FORWARD, 1000);
+		delay_ms(100);
+	}
+	resetQeiFeedback();
+	qeiFeedback = 121620;												// reset QEI feedback to 121620 = 1520.25mm
+	resetVextaFeedback();												// reset Vexta feedback to 0
+	resetCurrentPosition (0);										// reset position to 0.0mm.
+	resetPositionToGo (7601);                   // reset position to go to 1520.25mm.
+	
+	
+	runStepper (MOTOR_STOP, 1000);
+	delay_ms(1000);
+	linearGuideStep (MOTOR_BACKWARD, 50, 500);
+	MOTOR_COIL_ON;
+
+	while (TAIL_SENSOR != Bit_RESET){
+		runStepper (MOTOR_FORWARD, 1000);
+		delay_ms(100);
+	}
+	runStepper (MOTOR_STOP, 1000);		// stop the motor
+	delay_ms(1000);
+	MOTOR_COIL_OFF;
+	
+	resetQeiFeedback();
+	qeiFeedback = 121620;												// reset QEI feedback to 121620 = 1520.25mm
+	resetVextaFeedback();												// reset Vexta feedback to 0
+	resetCurrentPosition (0);										// reset position to 0.0mm.
+	resetPositionToGo (7601);                   // reset position to go to 1520.25mm.
 }

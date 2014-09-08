@@ -849,9 +849,9 @@ put\startup_stm32f4xx.d -o.\output\startup_stm32f4xx.o -IC:\Keil\ARM\RV31\INC -
 ARM Macro Assembler    Page 14 
 
 
-IC:\Keil\ARM\CMSIS\Include -IC:\Keil\ARM\Inc\ST\STM32F4xx --predefine="__EVAL S
-ETA 1" --predefine="__MICROLIB SETA 1" --list=.\startup_stm32f4xx.lst ..\Librar
-ies\CMSIS\ST\STM32F4xx\Source\Templates\arm\startup_stm32f4xx.s
+IC:\Keil\ARM\CMSIS\Include -IC:\Keil\ARM\Inc\ST\STM32F4xx --predefine="__MICROL
+IB SETA 1" --list=.\startup_stm32f4xx.lst ..\Libraries\CMSIS\ST\STM32F4xx\Sourc
+e\Templates\arm\startup_stm32f4xx.s
 
 
 
@@ -2281,4 +2281,4 @@ startup_stm32f4xx.s
 startup_stm32f4xx.s
 Comment: __main used once
 2 symbols
-444 symbols in table
+443 symbols in table

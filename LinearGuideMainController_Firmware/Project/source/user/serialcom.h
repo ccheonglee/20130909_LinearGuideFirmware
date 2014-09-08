@@ -26,13 +26,12 @@
 
 #include "stm32f4xx.h"
 
-#define COMMAND_STEP 0
-#define COMMAND_HOME 1
-#define COMMAND_LEFT 2
-#define COMMAND_RIGHT 3
+#define COMMAND_HOME_LEFT 2
+#define COMMAND_HOME_RIGHT 3
 #define COMMAND_STLF 4
 #define COMMAND_STRG 5
 #define COMMAND_STATUS 6
+#define COMMAND_UNKNOWN 255
 
 typedef struct {
 	uint8_t	command;
@@ -43,6 +42,9 @@ typedef struct {
 void Usart2_init(uint32_t baudrate);
 void UsartRxCallback (uint8_t data);
 uint8_t parseSerialMessage (PSER_MSG message);
+uint8_t getNmeaChecksum (char *nmeaStr, uint16_t length);
+uint8_t getXorChecksum (char *str, uint16_t length);
+int32_t htoi(char *s, uint8_t length);
 
 #endif /*__SERIALCOM_H */
 
